@@ -4,6 +4,7 @@ import com.hardik.kotlin.server.data.DatabaseFactory.dbQuery
 import com.hardik.kotlin.server.data.tabels.BelongsToCollections
 import com.hardik.kotlin.server.data.tabels.Genres
 import com.hardik.kotlin.server.data.tabels.Movies
+import com.hardik.kotlin.server.data.tabels.MoviesGenres
 import com.hardik.kotlin.server.data.tabels.ProductionCompanies
 import com.hardik.kotlin.server.data.tabels.ProductionCountries
 import com.hardik.kotlin.server.data.tabels.SpokenLanguages
@@ -15,8 +16,14 @@ import com.hardik.kotlin.server.model.movie.ProductionCompanyDomain
 import com.hardik.kotlin.server.model.movie.ProductionCountryDomain
 import com.hardik.kotlin.server.model.movie.SpokenLanguageDomain
 import com.hardik.kotlin.server.utils.Constant.MOVIE_DB_NAME
-import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.JoinType
+import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.deleteWhere
+import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.select
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.update
 
 class MovieRepository() {
 
@@ -51,15 +58,21 @@ class MovieRepository() {
                     it[BelongsToCollections.backdropPath] = collection.backdrop_path
                     it[BelongsToCollections.name] = collection.name
                     it[BelongsToCollections.posterPath] = collection.poster_path
-                    it[BelongsToCollections.movieId] = movieId // Now using the non-nullable movieId
+                    it[BelongsToCollections.movieId] = movieId
                 }
             }
 
             movieDetail.genres?.forEach { genre ->
-                Genres.insert {
-                    it[Genres.id] = genre.id
-                    it[Genres.name] = genre.name
-                    it[Genres.movieId] = movieId
+                val existingGenre = Genres.select { Genres.id eq genre.id }.singleOrNull()
+                if (existingGenre == null) {
+                    Genres.insert {
+                        it[Genres.id] = genre.id
+                        it[Genres.name] = genre.name
+                    }
+                }
+                MoviesGenres.insert {
+                    it[MoviesGenres.movieId] = movieId
+                    it[MoviesGenres.genreId] = genre.id
                 }
             }
 
@@ -123,7 +136,7 @@ class MovieRepository() {
         }
 
         if (updatedRows > 0) {
-            // Update related tables by first deleting existing entries for this movieId
+            // Update related tables
             BelongsToCollections.deleteWhere { BelongsToCollections.movieId eq movieId }
             movieDetail.belongs_to_collection?.let { collection ->
                 BelongsToCollections.insert {
@@ -135,12 +148,19 @@ class MovieRepository() {
                 }
             }
 
-            Genres.deleteWhere { Genres.movieId eq movieId }
+            // Update Genres
+            MoviesGenres.deleteWhere { MoviesGenres.movieId eq movieId }
             movieDetail.genres?.forEach { genre ->
-                Genres.insert {
-                    it[Genres.id] = genre.id
-                    it[Genres.name] = genre.name
-                    it[Genres.movieId] = movieId
+                val existingGenre = Genres.select { Genres.id eq genre.id }.singleOrNull()
+                if (existingGenre == null) {
+                    Genres.insert {
+                        it[Genres.id] = genre.id
+                        it[Genres.name] = genre.name
+                    }
+                }
+                MoviesGenres.insert {
+                    it[MoviesGenres.movieId] = movieId
+                    it[MoviesGenres.genreId] = genre.id
                 }
             }
 
@@ -185,7 +205,7 @@ class MovieRepository() {
         if (deletedRows > 0) {
             // Delete related entries
             BelongsToCollections.deleteWhere { BelongsToCollections.movieId eq movieId }
-            Genres.deleteWhere { Genres.movieId eq movieId }
+            MoviesGenres.deleteWhere { MoviesGenres.movieId eq movieId } // Delete from the junction table
             ProductionCompanies.deleteWhere { ProductionCompanies.movieId eq movieId }
             ProductionCountries.deleteWhere { ProductionCountries.movieId eq movieId }
             SpokenLanguages.deleteWhere { SpokenLanguages.movieId eq movieId }
@@ -210,9 +230,10 @@ class MovieRepository() {
                     name = it[BelongsToCollections.name],
                     poster_path = it[BelongsToCollections.posterPath]
                 )
-            }.singleOrNull() // Assuming only one BelongsToCollection per movie in this structure
+            }.singleOrNull()
 
-        val genres = Genres.select { Genres.movieId eq movieId }
+        val genres = MoviesGenres.join(Genres, onColumn = MoviesGenres.genreId, otherColumn = Genres.id, joinType = JoinType.INNER)
+            .select { MoviesGenres.movieId eq movieId }
             .map { GenreDomain(it[Genres.id], it[Genres.name]) }
 
         val productionCompanies = ProductionCompanies.select { ProductionCompanies.movieId eq movieId }

@@ -40,9 +40,15 @@ object BelongsToCollections : Table() {
 object Genres : Table() {
     val id = integer("id")
     val name = varchar("name", 255).nullable()
-    val movieId = integer("movie_id").references(Movies.id)
 
     override val primaryKey = PrimaryKey(id)
+}
+
+object MoviesGenres : Table() {
+    val movieId = integer("movie_id").references(Movies.id)
+    val genreId = integer("genre_id").references(Genres.id)
+
+    override val primaryKey = PrimaryKey(movieId, genreId)
 }
 
 object ProductionCompanies : Table() {

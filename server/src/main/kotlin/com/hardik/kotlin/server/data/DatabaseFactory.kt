@@ -3,6 +3,7 @@ package com.hardik.kotlin.server.data
 import com.hardik.kotlin.server.data.tabels.BelongsToCollections
 import com.hardik.kotlin.server.data.tabels.Genres
 import com.hardik.kotlin.server.data.tabels.Movies
+import com.hardik.kotlin.server.data.tabels.MoviesGenres
 import com.hardik.kotlin.server.data.tabels.ProductionCompanies
 import com.hardik.kotlin.server.data.tabels.ProductionCountries
 import com.hardik.kotlin.server.data.tabels.Products
@@ -30,7 +31,8 @@ object DatabaseFactory {
                         Genres,
                         ProductionCompanies,
                         ProductionCountries,
-                        SpokenLanguages
+                        SpokenLanguages,
+                        MoviesGenres
                     )
 
                     PRODUCT_DB_NAME -> SchemaUtils.create(Products)
